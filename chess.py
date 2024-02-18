@@ -1,7 +1,43 @@
 from copy import deepcopy
 import colored
+import re
 
 #Assume a standard 8x8 chessboard with a standard set of pieces. Game record is encoded in PGN.
+
+global verbose
+verbose = 0
+
+class QuantumChessGame:
+	def __init__(self):
+		self.instances = [GameInstance()]
+
+	def move(self, move):
+		next_instances = []
+
+		for instance in self.instances:
+			new_instance = deepcopy(instance)
+			if new_instance.move(move):
+				next_instances.append(new_instance)
+
+		if len(next_instances) == 0:
+			raise Exception('Move is not legal in any universe.')
+		else:
+			self.instances = next_instances
+
+	def superposition(self, square):
+		next_instances = []
+
+		for instance in self.instances:
+			for rank in range(8):
+				for file in range(8):
+					new_instance = deepcopy(instance)
+					if new_instance.move((square, (rank, file))):
+						next_instances.append(new_instance)
+
+		if len(next_instances) == 0:
+			raise Exception('No valid moves from source square.')
+		else:
+			self.instances = next_instances
 
 class BoardState:
 	def __init__(self, board=None, last_move=-1):
@@ -26,6 +62,7 @@ class BoardState:
 	def parse_coordinate(self, coordinate):
 		"""
 		Turns string coordinates (such as 'f5') into list indices.
+		Deprecatred for parse_algebraic_coordinate()
 		"""
 		say(6, f'Parsing coordinate: {coordinate}')
 		columns = {'a':0,'b':1,'c':2,'d':3,'e':4,'f':5,'g':6,'h':7}
@@ -82,26 +119,36 @@ class GameInstance:
 
 		self.starting_board = starting_board
 
+	def test_coordinate_validity(move):
+		try:
+			for coord in move:
+				for axis in coord:
+					if axis not in range(8):
+						raise ValueError('Bad coordinates.')
+		except:
+			raise ValueError('Incorrectly formatted coordinates.')
+
 	def log_move(self, move):
-		"""
+		'''
 		Adds a move to the record. Does not check if the move was legal or advance the
 		state of the board.
 		THIS is where letters stop. Only ((a, b) (x, y)) formatted moves.
-		"""
-		self.record.append((self.current_board.parse_coordinate(move[0]), self.current_board.parse_coordinate(move[1])))
+		'''
+		#self.record.append((self.current_board.parse_coordinate(move[0]), self.current_board.parse_coordinate(move[1])))
+		self.record.append(move)
 
-		return True
-
-	def commit_moves(self):
+	def commit_moves(self, **kwargs):
 		"""
 		Plays through the game as referenced in the record, with changes reflecting
 		in current_board. Returns True if all moves were legal and False if otherwise.
 		"""
+		check_for_legality = kwargs.get('check_for_legality', True)
+
 		start_index = int(self.current_board.last_move + 1)
 
 		for move in self.record[start_index:]:
 			
-			if is_legal_chess_move(self.current_board, move, record=self.record):
+			if check_for_legality is False or is_legal_chess_move(self.current_board, move, record=self.record):
 				start_square = self.current_board.square(move[0])
 
 				#okay this line is basically unreadable but I promise it is True if the move was an en passant
@@ -120,6 +167,22 @@ class GameInstance:
 
 		return True
 
+	def move(self, move):
+		'''
+		Adds one move to the log IF it is legal, then commits the log.
+		Returns False if move is illegal and does not affect the log.
+		Log cannot have uncommitted moves to run this.
+		'''
+		if self.current_board.last_move != len(self.record)-1:
+			raise Exception('Log has uncommitted moves.')
+
+		if is_legal_chess_move(self.current_board, move):
+			self.log_move(move)
+			self.commit_moves(check_for_legality=False)
+			return True
+		else:
+			return False
+
 def is_in_check(board, color):
 	for king_x in range(8):
 		for king_y in range(8):
@@ -133,12 +196,12 @@ def is_in_check(board, color):
 	return False
 
 def is_legal_chess_move(board: BoardState, move, **kwargs) -> bool:
-	"""
+	'''
 	Given a chess move notated as a start coordinate and an ending coordinate,
 	return True if legal and False if illegal. Pawn promotions are going to be complicated.
 	For now, I will assume that the move will be in the format [coordinate, coordinate]
 	Monolithic function designed around the standard rules of chess.
-	"""
+	'''
 	record = kwargs.get('record', None)
 	check_for_check = kwargs.get('check_for_check', True)
 	allow_moves_out_of_turn = kwargs.get('allow_moves_out_of_turn', False)
@@ -171,7 +234,7 @@ def is_legal_chess_move(board: BoardState, move, **kwargs) -> bool:
 		say(2+verb_affector, f"Move is illegal because {piece_color} cannot move out of turn.")
 		return False
 
-	if start_square == end_square:
+	if not allow_moves_in_place and start_square == end_square:
 		say(2+verb_affector, "Move is illegal because you cannot move to the same square you're on.")
 		return False
 
@@ -308,8 +371,7 @@ def is_legal_chess_move(board: BoardState, move, **kwargs) -> bool:
 	return True
 
 def say(msg_verbosity, message):
-	#if msg_verbosity <= verbosity:
-	if msg_verbosity <= 3:
+	if msg_verbosity <= verbose:
 		print(message)
 
 def visualize(board: BoardState, **kwargs):
@@ -323,8 +385,9 @@ def visualize(board: BoardState, **kwargs):
 	beige = colored.Back.cyan
 	tan = colored.Back.blue
 	possible = colored.Back.green
+	source = colored.Back.red
 
-	icons = {"pawn":"p ", "rook":"r ", "knight":"k ", "bishop":"b ", "queen":"Q ", "king":"K ", "empty":"  "}
+	icons = {"pawn":"p ", "rook":"r ", "knight":"n ", "bishop":"b ", "queen":"Q ", "king":"K ", "empty":"  "}
 	output = ''
 
 	for y in range(7, -1, -1):
@@ -335,8 +398,10 @@ def visualize(board: BoardState, **kwargs):
 		for x in range(8):
 			square = board.square((x, y))
 
-			if possible_moves is not None and (possible_moves == (x, y) or is_legal_chess_move(board, (board.parse_coordinate(possible_moves), (x, y)), record=record)):
+			if possible_moves is not None and is_legal_chess_move(board, (board.parse_coordinate(possible_moves), (x, y)), record=record):
 				back = possible
+			elif possible_moves is not None and possible_moves == (x, y):
+				back = source
 			elif abs(x % 2 - y % 2):
 				back = beige
 			else:
@@ -357,12 +422,73 @@ def visualize(board: BoardState, **kwargs):
 
 	print(output)
 
+def current_turn(move_number):
+	if move_number % 2:
+		return 'white'
+	else:
+		return 'black'
+
+def parse_algebraic_coordinate(coord_str):
+	coord = [None, None]
+	ranks = {'1':0, '2':1 ,'3':2 ,'4':3 ,'5':4 ,'6':5 ,'7':6 ,'8':7}
+	files = {'a':0, 'b':1 ,'c':2 ,'d':3 ,'e':4 ,'f':5 ,'g':6 ,'h':7}
+	say(5, f'Parsing coordinate string: \'{coord_str}\'')
+
+	for char in coord_str:
+		if char in ranks:
+			coord[1] = ranks[char]
+		elif char in files:
+			coord[0] = files[char]
+
+	return tuple(coord)
+
+# def parse_alg_move(board, move):
+# 	'''
+# 	Parses proper Algebraic Notation, returning integer coordinates. ((a, b), (x, y))
+# 	Will also passthrough integer coordinates.
+# 	Expects proper capitalization.
+# 	Hate that I have to do this, but it does have to check for move legality for it to work.
+# 	Example moves:	Ra5#	Q3xe4	e6	axb3
+# 	'''
+# 	piece_names = {'Q':'queen', 'K':'king', 'R':'rook', 'B':'bishop', 'N':'knight'}
+
+# 	parsed_move = ((None, None), (None, None))
+# 	source_piece = None
+# 	capture = False
+
+# 	if isinstance(move, str):	#Algebraic notation
+# 		if re.search('^[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8][+#!?]?$', move) is None:
+# 			raise ValueError('Invalid algebraic notation.')
+
+# 		trimmed_move = move.strip('!?+#')
+
+# 		parsed_move[1] = parse_algebraic_coordinate(move[-2:])
+# 		trimmed_move = move[:-2]
+# 		if trimmed_move[-1] == 'x':
+# 			trimmed_move = trimmed_move[:-1]
+# 			capture = True
+
+# 		if board.square(parsed_move[1]) != {}[]:
+# 			raise ValueError('Invalid move: unexpected capture.')
+
+# 		if move[0] in piece_names: #Not a pawn move
+# 			source_piece = current_turn(board.last_move) + ' ' + piece_names[move[0]]
+# 			trimmed_move = trimmed_move[1:]
+
+# 		elif len(trimmed_move) == 2: #Not a pawn move (implicit)
+# 			parsed_move[0] = parse_algebraic_coordinate(trimmed_move)
 
 
 
+# 	elif isinstance(move, (list, tuple)): #Explicit coordinates
+# 		try:
+# 			for coord in move:
+# 				for axis in coord:
+# 					if not (isinstance(axis, int) and axis in range(8)):
+# 						raise ValueError('Invalid explicit coordinates.')
+# 			return move
+# 		except:
+# 			raise ValueError('Invalid explicit coordinate format.')
 
-
-
-
-
-
+# 	else:
+# 		raise TypeError('Moves must be encoded in a string, tuple, or list.')

@@ -1,24 +1,32 @@
 import chess
 
-verbosity = 0
+keyword = ''
 
+while keyword != 'exit':
 
-NormalChessGame = chess.GameInstance()
-move_log = []
+	command = input('>').split(' ')
+	keyword = command[0]
+	args = command[1:]
 
-while True:
-	chess.visualize(NormalChessGame.current_board)
-	move = input("Input a move: ")
-	move_log.append(move)
+	if keyword == 'new':
+		game = chess.GameInstance()
 
-	if move == 'exit':
-		break
+	elif keyword in ('b', 'board'):
+		chess.visualize(game.current_board)
 
-	start_square = move[:2]
-	end_square = move[2:]
+	elif keyword in ('m', 'move'):
+		move = (chess.parse_algebraic_coordinate(args[0][:2]), chess.parse_algebraic_coordinate(args[0][2:]))
+		if not game.move(move):
+			print('Illegal move.')
 
-	NormalChessGame.log_move((start_square, end_square))
-	legal = NormalChessGame.commit_moves()
+	elif keyword == 'moves':
+		chess.visualize(game.current_board, possible_moves=chess.parse_algebraic_coordinate(args[0]), record=game.record)
 
-	if not legal:
-		break
+	elif keyword in ('v', 'verb', 'verbose'):
+		chess.verbose = int(args[0])
+
+	elif keyword == 'exit':
+		continue
+
+	else:
+		print(f'-bash: {keyword}: command not found')
