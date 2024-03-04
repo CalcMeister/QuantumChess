@@ -1,8 +1,10 @@
 from copy import deepcopy
 import colored
 import re
+import toolz
+from collections import Counter
 
-#Assume a standard 8x8 chessboard with a standard set of pieces. Game record is encoded in PGN.
+#Assume a standard 8x8 chessboard with a standard set of pieces.
 
 global verbose
 verbose = 0
@@ -24,8 +26,12 @@ class QuantumChessGame:
 		else:
 			self.instances = next_instances
 
-	def superposition(self, square):
+		self.cull_duplicate_states()
+
+	def superposition(self, square, **kwargs):
 		next_instances = []
+
+		cull_duplicates = kwargs.get('cull_duplicates', True)
 
 		for instance in self.instances:
 			for rank in range(8):
@@ -39,17 +45,22 @@ class QuantumChessGame:
 		else:
 			self.instances = next_instances
 
+		self.cull_duplicate_states()
+
+	def cull_duplicate_states(self):
+		self.instances = list(toolz.unique(self.instances, key=lambda x: x.current_board))
+
 class BoardState:
 	def __init__(self, board=None, last_move=-1):
 		default_start = [
-			["white rook","white pawn",None,None,None,None,"black pawn","black rook"],
-			["white knight","white pawn",None,None,None,None,"black pawn","black knight"],
-			["white bishop","white pawn",None,None,None,None,"black pawn","black bishop"],
-			["white queen","white pawn",None,None,None,None,"black pawn","black queen"],
-			["white king","white pawn",None,None,None,None,"black pawn","black king"],
-			["white bishop","white pawn",None,None,None,None,"black pawn","black bishop"],
-			["white knight","white pawn",None,None,None,None,"black pawn","black knight"],
-			["white rook","white pawn",None,None,None,None,"black pawn","black rook"]
+			['white rook','white pawn',None,None,None,None,'black pawn','black rook'],
+			['white knight','white pawn',None,None,None,None,'black pawn','black knight'],
+			['white bishop','white pawn',None,None,None,None,'black pawn','black bishop'],
+			['white queen','white pawn',None,None,None,None,'black pawn','black queen'],
+			['white king','white pawn',None,None,None,None,'black pawn','black king'],
+			['white bishop','white pawn',None,None,None,None,'black pawn','black bishop'],
+			['white knight','white pawn',None,None,None,None,'black pawn','black knight'],
+			['white rook','white pawn',None,None,None,None,'black pawn','black rook']
 		]
 
 		if board is None:
@@ -59,11 +70,17 @@ class BoardState:
 
 		self.last_move = last_move
 
+	def __hash__(self):
+		return hash(tuple(tuple(file) for file in self.board))
+
+	def __eq__(self, other):
+		return self.board == other.board
+
 	def parse_coordinate(self, coordinate):
-		"""
+		'''
 		Turns string coordinates (such as 'f5') into list indices.
 		Deprecatred for parse_algebraic_coordinate()
-		"""
+		'''
 		say(6, f'Parsing coordinate: {coordinate}')
 		columns = {'a':0,'b':1,'c':2,'d':3,'e':4,'f':5,'g':6,'h':7}
 		try:
@@ -72,40 +89,40 @@ class BoardState:
 			else:
 				return tuple(coordinate)
 		except:
-			raise ValueError("Bad coordinates.")
+			raise ValueError('Bad coordinates.')
 
 	def square(self, coordinate):
-		"""
+		'''
 		Returns the name of the piece on a square. None if None.
-		"""
+		'''
 		coordinate = self.parse_coordinate(coordinate)
 		return self.board[coordinate[0]][coordinate[1]]
 
 	def set_last_move(self, move_number):
-		"""
+		'''
 		Sets the value for the last move that was played.
-		"""
+		'''
 		self.last_move = move_number
 
 	def increment_last_move(self):
-		"""
+		'''
 		Increments the last move.
-		"""
+		'''
 		self.last_move += 1
 
 	def set_square(self, coordinate, piece):
-		"""
+		'''
 		Set a square to be a piece or None.
-		"""
+		'''
 		coordinate = self.parse_coordinate(coordinate)
 		self.board[coordinate[0]][coordinate[1]] = piece
 
 class GameInstance:
 	def __init__(self, record=None, starting_board=BoardState(), current_board=None):
-		"""
+		'''
 		The GameInstance class does not check that current_board is valid
 		upon instantiation. These can be checked against the record using validate_record.
-		"""
+		'''
 
 		if record is None:
 			self.record = []
@@ -138,10 +155,10 @@ class GameInstance:
 		self.record.append(move)
 
 	def commit_moves(self, **kwargs):
-		"""
+		'''
 		Plays through the game as referenced in the record, with changes reflecting
 		in current_board. Returns True if all moves were legal and False if otherwise.
-		"""
+		'''
 		check_for_legality = kwargs.get('check_for_legality', True)
 
 		start_index = int(self.current_board.last_move + 1)
@@ -186,11 +203,11 @@ class GameInstance:
 def is_in_check(board, color):
 	for king_x in range(8):
 		for king_y in range(8):
-			if board.square((king_x, king_y)) == color + " king":
+			if board.square((king_x, king_y)) == color + ' king':
 				for x in range(8):
 					for y in range(8):
 						if is_legal_chess_move(board, ((x, y), (king_x, king_y)), check_for_check=False, allow_moves_out_of_turn=True):
-							say(5, f"{color}'s king is in check by the {board.square((x, y))} at {(x,y)}")
+							say(5, f'{color}\'s king is in check by the {board.square((x, y))} at {(x,y)}')
 							return True
 
 	return False
@@ -221,137 +238,137 @@ def is_legal_chess_move(board: BoardState, move, **kwargs) -> bool:
 		move = (board.parse_coordinate(move[:2]), board.parse_coordinate(move[2:]))
 
 	if piece is None:
-		say(2+verb_affector, f"Move is illegal because start square {start_square} is empty.")
+		say(2+verb_affector, f'Move is illegal because start square {start_square} is empty.')
 		return False
 
 	piece_type = piece[6:]
 	piece_color = piece[:5]
 	opponent_color = {'white':'black', 'black':'white'}[piece_color]
 
-	say(3+verb_affector, f"Checking if {piece_color}'s {piece_type} at {start_square} can move to {end_square} where the piece is {str(captured_piece)}...")
+	say(3+verb_affector, f'Checking if {piece_color}\'s {piece_type} at {start_square} can move to {end_square} where the piece is {str(captured_piece)}...')
 
 	if not allow_moves_out_of_turn and {1:'white', 0:'black'}[board.last_move % 2] != piece_color:
-		say(2+verb_affector, f"Move is illegal because {piece_color} cannot move out of turn.")
+		say(2+verb_affector, f'Move is illegal because {piece_color} cannot move out of turn.')
 		return False
 
 	if not allow_moves_in_place and start_square == end_square:
-		say(2+verb_affector, "Move is illegal because you cannot move to the same square you're on.")
+		say(2+verb_affector, 'Move is illegal because you cannot move to the same square you\'re on.')
 		return False
 
 	if captured_piece != None:
 		if piece_color == captured_piece[:5]:
-			say(2+verb_affector, "Move is illegal because pieces cannot capture their own color.")
+			say(2+verb_affector, 'Move is illegal because pieces cannot capture their own color.')
 			return False
 
-	if piece_type == "pawn":
+	if piece_type == 'pawn':
 		if absolute_offset[0] == 0:
 			if ((end_square[1]-start_square[1]) * {'white':1, 'black':-1}[piece_color]) not in (2, 1)[(start_square[1] != {'white':1, 'black':6}[piece_color]):]:
-				say(2+verb_affector, "Move is illegal because pawns can't move like that. (1)")
+				say(2+verb_affector, 'Move is illegal because pawns can\'t move like that. (1)')
 				return False
 			if absolute_offset[1] == 2 and board.square((start_square[0], start_square[1]+{'white':1, 'black':-1}[piece_color])) is not None:
-				say(2+verb_affector, "Move is illegal because pawns cannot jump pieces.")
+				say(2+verb_affector, 'Move is illegal because pawns cannot jump pieces.')
 				return False
 			if board.square(end_square) is not None:
-				say(2+verb_affector, "Move is illegal because pawns cannot capture forwards.")
+				say(2+verb_affector, 'Move is illegal because pawns cannot capture forwards.')
 				return False
 
 		elif absolute_offset[0] == 1:
 			if end_square[1]-start_square[1] != {'white':1, 'black':-1}[piece_color]:
-				say(2+verb_affector, "Move is illegal because pawns can't move like that. (2)")
+				say(2+verb_affector, 'Move is illegal because pawns can\'t move like that. (2)')
 				return False
 			if captured_piece is None:
 				en_passant_capture_square = (end_square[0], end_square[1]+{'white':-1, 'black':1}[piece_color])
 				if end_square[1] == {'white':5, 'black':2}[piece_color] and board.square(en_passant_capture_square) == f'{opponent_color} pawn': #attempted en passant
 					is_en_passant = True
 					if record is not None and board.parse_coordinate(record[board.last_move][1]) != en_passant_capture_square:
-						say(2+verb_affector, "Move is illegal because en passant only works immediately following a pawn moving two squares forward.")
+						say(2+verb_affector, 'Move is illegal because en passant only works immediately following a pawn moving two squares forward.')
 						return False
 				else:
-					say(2+verb_affector, "Move is illegal because pawns can only move diagonally when capturing.")
+					say(2+verb_affector, 'Move is illegal because pawns can only move diagonally when capturing.')
 					return False
 
 		else:
-			say(2+verb_affector, "Move is illegal because pawns can't move like that. (3)")
+			say(2+verb_affector, 'Move is illegal because pawns can\'t move like that. (3)')
 			return False
 
-	elif piece_type == "rook":
+	elif piece_type == 'rook':
 		if min(absolute_offset) == 0:
 			for i in range(1, max(absolute_offset)):
 				if board.square(((start_square[0] + i*(absolute_offset[0] != 0)*(2*(end_square[1]>start_square[1])-1)), (start_square[1] + i*(absolute_offset[1] != 0)*(2*(end_square[1]>start_square[1])-1)))):
-					say(2+verb_affector, "Move is illegal because rooks cannot jump pieces.")
+					say(2+verb_affector, 'Move is illegal because rooks cannot jump pieces.')
 					return False
 		else:
-			say(2+verb_affector, "Move is illegal because rooks must move along a rank or file.")
+			say(2+verb_affector, 'Move is illegal because rooks must move along a rank or file.')
 			return False
 
-	elif piece_type == "knight":
+	elif piece_type == 'knight':
 		if absolute_offset not in ((2, 1), (1, 2)):
-			say(2+verb_affector, "Move is illegal because knights can't move like that.")
+			say(2+verb_affector, 'Move is illegal because knights can\'t move like that.')
 			return False
 
-	elif piece_type == "bishop":
+	elif piece_type == 'bishop':
 		if absolute_offset[0] != absolute_offset[1]:
-			say(2+verb_affector, "Move is illegal because bishops must move diagonally.")
+			say(2+verb_affector, 'Move is illegal because bishops must move diagonally.')
 			return False
 		for i in range(1, absolute_offset[0]):
 			if board.square((start_square[0] + i*(2*(end_square[0]>start_square[0])-1), start_square[1] + i*(2*(end_square[1]>start_square[1])-1))) is not None:
-				say(2+verb_affector, "Move is illegal because bishops cannot jump pieces.")
+				say(2+verb_affector, 'Move is illegal because bishops cannot jump pieces.')
 				return False
 
-	elif piece_type == "queen":
+	elif piece_type == 'queen':
 		if absolute_offset[0] == absolute_offset[1]:
 			for i in range(1, absolute_offset[0]):
 				if board.square((start_square[0] + i*(2*(end_square[0]>start_square[0])-1), start_square[1] + i*(2*(end_square[1]>start_square[1])-1))) is not None:
-					say(2+verb_affector, "Move is illegal because queens cannot jump pieces.")
+					say(2+verb_affector, 'Move is illegal because queens cannot jump pieces.')
 					return False
 		elif min(absolute_offset) == 0:
 			for i in range(1, max(absolute_offset)):
 				if board.square(((start_square[0] + i*(absolute_offset[0] != 0)*(2*(end_square[1]>start_square[1])-1)), (start_square[1] + i*(absolute_offset[1] != 0)*(2*(end_square[1]>start_square[1])-1)))):
-					say(2+verb_affector, "Move is illegal because queens cannot jump pieces.")
+					say(2+verb_affector, 'Move is illegal because queens cannot jump pieces.')
 					return False
 		else:
-			say(2+verb_affector, "Move is illegal because queens must move along a rank, file, or diagonal.")
+			say(2+verb_affector, 'Move is illegal because queens must move along a rank, file, or diagonal.')
 			return False
 
-	elif piece_type == "king":
+	elif piece_type == 'king':
 		if absolute_offset[1] == 0 and end_square[0] in (2, 6): #If it's an attempted castle
 			is_castle = {6:'kingside', 2:'queenside'}[end_square[0]]
 
 			if is_in_check(board, piece_color):
-				say(2+verb_affector, "Move is illegal because castles cannot occur out of check.")
+				say(2+verb_affector, 'Move is illegal because castles cannot occur out of check.')
 				return False
 
 			if board.square(({2:3, 6:5}[end_square[0]], end_square[1])) is not None:
-				say(2+verb_affector, "Move is illegal because there's a piece in the way of the castle.")
+				say(2+verb_affector, 'Move is illegal because there\'s a piece in the way of the castle.')
 				return False
 
 			if not is_legal_chess_move(board, (start_square, ({2:3, 6:5}[end_square[0]], end_square[1]))):
-				say(2+verb_affector, "Move is illegal because kings cannot castle through check.")
+				say(2+verb_affector, 'Move is illegal because kings cannot castle through check.')
 				return False
 
 			if board.square(({'kingside':7, 'queenside':0}[is_castle], {'black':7, 'white':0}[piece_color])) != f'{piece_color} rook':
-				say(2+verb_affector, "Move is illegal because there is no rook to castle with.")
+				say(2+verb_affector, 'Move is illegal because there is no rook to castle with.')
 				return False
 
 			if record is not None:
 				for m in record[:board.last_move + 1]:
 					if board.parse_coordinate(m[0]) == start_square:
-						say(2+verb_affector, "Move is illegal because the king has already moved and thus cannot castle.")
+						say(2+verb_affector, 'Move is illegal because the king has already moved and thus cannot castle.')
 						return False
 					if board.parse_coordinate(m[0]) == ({'kingside':7, 'queenside':0}[is_castle], {'black':7, 'white':0}[piece_color]):
-						say(2+verb_affector, "Move is illegal because the rook involved in the castle has already moved.")
+						say(2+verb_affector, 'Move is illegal because the rook involved in the castle has already moved.')
 						return False
 
 		elif max(absolute_offset) > 1:
-			say(2+verb_affector, "Move is illegal because kings can only move one square at a time.")
+			say(2+verb_affector, 'Move is illegal because kings can only move one square at a time.')
 			return False
 
 	else:
-		say(2+verb_affector, "Move is illegal because the piece type is unknown.")
+		say(2+verb_affector, 'Move is illegal because the piece type is unknown.')
 		return False
 
 	if check_for_check:
-		say(2, "Checking if king will be in check after move...")
+		say(2, 'Checking if king will be in check after move...')
 		board.set_square(start_square, None)
 		board.set_square(end_square, piece)
 		board.increment_last_move()
@@ -364,10 +381,10 @@ def is_legal_chess_move(board: BoardState, move, **kwargs) -> bool:
 			board.set_square(en_passant_capture_square, None)
 
 		if is_in_check(board, piece_color):
-			say(2, f"Move is illegal because {piece_color}'s king would be in check.")
+			say(2, f'Move is illegal because {piece_color}\'s king would be in check.')
 			return False
 
-	say(2+verb_affector, "Move is legal")
+	say(2+verb_affector, 'Move is legal')
 	return True
 
 def say(msg_verbosity, message):
@@ -387,7 +404,7 @@ def visualize(board: BoardState, **kwargs):
 	possible = colored.Back.green
 	source = colored.Back.red
 
-	icons = {"pawn":"p ", "rook":"r ", "knight":"n ", "bishop":"b ", "queen":"Q ", "king":"K ", "empty":"  "}
+	icons = {'pawn':'p ', 'rook':'r ', 'knight':'n ', 'bishop':'b ', 'queen':'Q ', 'king':'K ', 'empty':'  '}
 	output = ''
 
 	for y in range(7, -1, -1):
@@ -409,7 +426,7 @@ def visualize(board: BoardState, **kwargs):
 
 			if square is None:
 				square = 'xxxxx empty'
-			elif square[:5] == "white":
+			elif square[:5] == 'white':
 				fore = white
 			else:
 				fore = black
@@ -421,6 +438,58 @@ def visualize(board: BoardState, **kwargs):
 		output += '  a b c d e f g h'
 
 	print(output)
+
+def visualize_superposition(quantum_game: QuantumChessGame, **kwargs):
+	display_coordinates = kwargs.get('display_coordinates', True)
+	record = kwargs.get('record', None)
+	size = kwargs.get('size', 1) #Size of the displayed board, in character width of a square / 2
+
+	black = colored.Fore.black
+	white = colored.Fore.white
+	beige = colored.Back.cyan
+	tan = colored.Back.blue
+	superpositioned = colored.Back.magenta
+
+	icons = {'pawn':'p', 'rook':'r', 'knight':'n', 'bishop':'b', 'queen':'Q', 'king':'K'}
+	fore_colors = {'white':white, 'black':black}
+	spaces = ' ' * (size * 2)
+	output = ''
+
+	for y in range(7, -1, -1):
+		
+		if display_coordinates:
+			output += str(y + 1)+' '
+
+		for x in range(8):
+			pieces_in_superposition = Counter([i.current_board.square((x,y)) for i in quantum_game.instances])
+
+			if len(pieces_in_superposition) == 1:
+				if abs(x % 2 - y % 2):
+					back = beige
+				else:
+					back = tan
+
+			elif len(pieces_in_superposition) > 1:
+				back = superpositioned
+
+			if None in pieces_in_superposition:
+				pieces_in_superposition.pop(None)
+
+			display_str = back
+			for piece in tuple(pieces_in_superposition)[:size * 2]:
+				display_str += fore_colors[piece[:5]] + icons[piece[6:]]
+
+			display_str += spaces[:size * 2 - len(pieces_in_superposition)]
+
+			output += display_str
+
+		output += colored.Style.reset+'\n'
+
+	if display_coordinates:
+		output += '  a b c d e f g h'
+
+	print(output)
+
 
 def current_turn(move_number):
 	if move_number % 2:
