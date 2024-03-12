@@ -1,4 +1,4 @@
-import chess as ch
+import quantum_chess as ch
 from copy import deepcopy
 
 #Quantum chess simulator using my chess library.
@@ -6,11 +6,15 @@ from copy import deepcopy
 game = ch.QuantumChessGame()
 #ch.verbose = 3
 
-while True:
-	print(f'{len(game.instances)} universes currently in superposition.')
+def plural_s(quantity):
+	if quantity == 1:
+		return ''
+	else:
+		return 's'
 
-	# for i in game.instances:
-	# 	ch.visualize(i.current_board)
+while True:
+	number_of_universes = len(game.instances)
+	print(f'{number_of_universes} universe{plural_s(number_of_universes)} currently in superposition.')
 
 	ch.visualize_superposition(game)
 
@@ -20,13 +24,11 @@ while True:
 		break
 
 	elif move[0] == 'q': #Placing a piece in a superposition between all its possible moves.
-		start_square = ch.parse_algebraic_coordinate(move[-2:])
+		start_square = move[-2:]
 		game.superposition(start_square)
 
 	elif len(move) == 4: #Normal move.
-		start_square = ch.parse_algebraic_coordinate(move[:2])
-		end_square = ch.parse_algebraic_coordinate(move[2:])
-		game.move((start_square, end_square))
+		game.move(move)
 
 	else:
 		print('Unknown move.\nex: \'d2d4\' for normal moves, \'q d2\' for quantum moves.')
