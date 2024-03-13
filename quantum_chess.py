@@ -1,16 +1,9 @@
 import chess
 import colored
-import toolz
 
+from toolz import unique
 from copy import deepcopy
 from collections import Counter
-
-#Assume a standard 8x8 chessboard with a standard set of pieces.
-
-global verbose
-verbose = 0
-
-###Classes
 
 class QuantumChessGame:
 	def __init__(self):
@@ -53,9 +46,7 @@ class QuantumChessGame:
 		self.cull_duplicate_states()
 
 	def cull_duplicate_states(self):
-		self.instances = list(toolz.unique(self.instances, key=lambda x: x.board_fen()))
-
-###Funcs
+		self.instances = list(unique(self.instances, key=lambda x: x.board_fen()))
 
 def visualize_superposition(quantum_game: QuantumChessGame, **kwargs):
 	display_coordinates = kwargs.get('display_coordinates', True)
@@ -72,31 +63,34 @@ def visualize_superposition(quantum_game: QuantumChessGame, **kwargs):
 	spaces = ' ' * (size * 2)
 	output = ''
 
+	piece_maps = [i.piece_map() for i in quantum_game.instances]
+	pieces_in_superposition = {square:[m.get(square, None) for m in piece_maps] for square in range(64)}
+
 	for y in range(7, -1, -1):
 		
 		if display_coordinates:
 			output += str(y + 1)+' '
 
 		for x in range(8):
-			pieces_in_superposition = Counter([i.piece_map().get(chess.square(x, y), None) for i in quantum_game.instances])
+			pieces_on_square = Counter(pieces_in_superposition[chess.square(x, y)])
 
-			if len(pieces_in_superposition) <= 1:
+			if len(pieces_on_square) <= 1:
 				if abs(x % 2 - y % 2):
 					back = beige
 				else:
 					back = tan
 
-			elif len(pieces_in_superposition) > 1:
+			elif len(pieces_on_square) > 1:
 				back = superpositioned
 
-			if None in pieces_in_superposition:
-				pieces_in_superposition.pop(None)
+			if None in pieces_on_square:
+				pieces_on_square.pop(None)
 
 			display_str = back
-			for piece in tuple(pieces_in_superposition)[:size * 2]:
+			for piece in tuple(pieces_on_square)[:size * 2]:
 				display_str += fore_colors[piece.color] + icons[piece.piece_type]
 
-			display_str += spaces[:size * 2 - len(pieces_in_superposition)]
+			display_str += spaces[:size * 2 - len(pieces_on_square)]
 
 			output += display_str
 
