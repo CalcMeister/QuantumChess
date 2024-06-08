@@ -1,3 +1,4 @@
+#import chess
 import chess
 import colored
 
@@ -26,14 +27,26 @@ class QuantumChessGame:
 
 		self.cull_duplicate_states()
 
-	def superposition(self, square, **kwargs):
-		piece_ID = kwargs.get('piece_ID', True) #Disambiguator for when there are multiple pieces on a square
+	def superposition(self, **kwargs):
+		"""
+		Branches the game tree between all possible moves from a specific square, all moves from any square, or some set of moves.
+		"""
 		cull_duplicates = kwargs.get('cull_duplicates', True)
+		from_square = kwargs.get('from_square', None)
+		set_of_moves = kwargs.get('set_of_moves', None)
 
 		next_instances = []
 
 		for instance in self.instances:
-			for move in (m for m in instance.legal_moves if m.uci()[:2] == square):
+			moves = instance.legal_moves
+
+			if set_of_moves is not None:
+				moves = set_of_moves
+
+			if from_square:
+				moves = (m for m in moves if m.uci()[:2] == from_square) 
+
+			for move in moves:
 				new_branch = instance.copy()
 				new_branch.push(move)
 				next_instances.append(new_branch)
@@ -50,6 +63,8 @@ class QuantumChessGame:
 
 def visualize_superposition(quantum_game: QuantumChessGame, **kwargs):
 	display_coordinates = kwargs.get('display_coordinates', True)
+	display_taken_pieces = kwargs.get('display_taken_pieces', True)
+	unicode_symbols = kwargs.get('unicode_symbols', True)
 	size = kwargs.get('size', 1) #Size of the displayed board, in character width of a square / 2
 
 	black = colored.Fore.black
@@ -88,13 +103,74 @@ def visualize_superposition(quantum_game: QuantumChessGame, **kwargs):
 
 			display_str = back
 			for piece in tuple(pieces_on_square)[:size * 2]:
-				display_str += fore_colors[piece.color] + icons[piece.piece_type]
+				piece_char = {True:piece.unicode_symbol(), False:icons[piece.piece_type]}[unicode_symbols]
+				display_str += fore_colors[piece.color] + piece_char
 
 			display_str += spaces[:size * 2 - len(pieces_on_square)]
 
 			output += display_str
 
 		output += colored.Style.reset+'\n'
+
+		# if display_taken_pieces:
+		# 	if y == 0:
+		# 		disp
+		# 	if y == 7:
+		# 		disp
+
+	if display_coordinates:
+		output += '  a b c d e f g h'
+
+	print(output)
+
+def visualize_instance(board, **kwargs):
+	display_coordinates = kwargs.get('display_coordinates', True)
+	display_taken_pieces = kwargs.get('display_taken_pieces', True)
+	unicode_symbols = kwargs.get('unicode_symbols', True)
+	show_colors = kwargs.get('show_colors', [True, False]) #white, black
+
+	black = colored.Fore.black
+	white = colored.Fore.white
+	beige = colored.Back.cyan
+	tan = colored.Back.blue
+
+	icons = {1:'p', 2:'n', 3:'b', 4:'r', 5:'Q', 6:'K'}
+	fore_colors = {True:white, False:black}
+	output = ''
+
+	piece_map = board.piece_map()
+
+	for y in range(7, -1, -1):
+		
+		if display_coordinates:
+			output += str(y + 1)+' '
+
+		for x in range(8):
+			
+			if abs(x % 2 - y % 2):
+				back = beige
+			else:
+				back = tan
+
+			piece = piece_map.get(chess.square(x,y), None)
+
+			display_str = back
+
+			if piece is not None and piece.color in show_colors:
+				piece_char = {True:piece.unicode_symbol(), False:icons[piece.piece_type]}[unicode_symbols]
+				display_str += fore_colors[piece.color] + piece_char + ' '
+			else:
+				display_str += '  '
+
+			output += display_str
+
+		output += colored.Style.reset+'\n'
+
+		# if display_taken_pieces:
+		# 	if y == 0:
+		# 		disp
+		# 	if y == 7:
+		# 		disp
 
 	if display_coordinates:
 		output += '  a b c d e f g h'

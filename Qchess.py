@@ -1,5 +1,4 @@
 import quantum_chess as ch
-from copy import deepcopy
 
 #Quantum chess simulator using my chess library.
 
@@ -25,7 +24,7 @@ while True:
 
 	elif move[0] == 'q': #Placing a piece in a superposition between all its possible moves.
 		start_square = move[-2:]
-		game.superposition(start_square)
+		game.superposition(from_square=start_square)
 
 	elif len(move) == 4: #Normal move.
 		game.move(move)
