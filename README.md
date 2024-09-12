@@ -6,7 +6,9 @@ The ramifications of this are very interesting. Read more here: https://www.ceme
 I probably could have a better naming scheme for these files but whatever.
 
 **quantum_chess.py**
+
 This library contains the `QuantumChessGame` class and some rudimentary ASCII visualization functions. Game logic is handled by the `chess` library on PyPi. https://pypi.org/project/chess/
+
 Intantiating a new Quantum Chess game from a standard starting position:
 ```
 import quantum_chess as ch
@@ -14,7 +16,9 @@ game = ch.QuantumChessGame()
 ```
 
 **Qchess.py**
+
 This is a (not very featureful) interface that allows you to play a game of Quantum Chess against another human player.
 
 **many_worlds_solitaire.py**
+
 This is an (also not very featureful) interface that allows you to play a game of Quantum Chess against a computer who can simultaneously play all their moves at once. I'm not sure where I'll go with this, but I'm intrigued by a deterministic chess-based solitaire. It's fun to play around with.
